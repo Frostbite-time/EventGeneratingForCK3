@@ -1,0 +1,48 @@
+﻿namespace = ttt
+
+ttt.0001 = {
+    type = character_event
+    title = ttt.0001.t
+    desc = ttt.0001.desc
+    theme = 
+    # other event details...
+
+        option = {
+            name = ttt.0001.1
+            # option details...
+        }
+
+        option = {
+            name = ttt.0001.2
+            # option details...
+        }
+
+        option = {
+            name = ttt.0001.3
+            # option details...
+        }
+}
+
+
+ttt.0002 = {
+    type = character_event
+    title = ttt.0002.t
+    desc = ttt.0002.desc
+    theme = 
+    # other event details...
+
+        option = {
+            name = ttt.0002.1
+            # option details...
+        }
+
+        option = {
+            name = ttt.0002.2
+            # option details...
+        }
+
+        option = {
+            name = ttt.0002.3
+            # option details...
+        }
+}
