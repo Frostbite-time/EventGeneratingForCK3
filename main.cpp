@@ -32,6 +32,19 @@ public:
         , currentOptionCounter(0)
         , eventCounter(0)
     {
+        //我愿意将以下行代码称为原初构造，别问为什么
+        QInputDialog* namespaceInputDialog = new QInputDialog(this);
+        namespaceInputDialog->setWindowTitle("Enter Namespace");
+        namespaceInputDialog->setLabelText("Namespace:");
+        namespaceInputDialog->setOkButtonText("OK");
+        namespaceInputDialog->setCancelButtonText("Cancel");
+        namespaceInputDialog->setInputMode(QInputDialog::TextInput);
+        QPushButton* loadButton = new QPushButton(this);
+        QSize iconSize(24, 24);  // You can adjust the size according to your icon
+        loadButton->setIconSize(iconSize);
+        loadButton->setFixedSize(iconSize);
+
+
         QHBoxLayout* mainLayout = new QHBoxLayout(this);  // Change QVBoxLayout to QHBoxLayout
         QVBoxLayout* leftLayout = new QVBoxLayout();  // Layout for the left side
         QVBoxLayout* rightLayout = new QVBoxLayout();  // Layout for the right side (sidebar)
@@ -39,6 +52,16 @@ public:
         titleLocalisationLineEdit = new QLineEdit(this);
         descLocalisationLineEdit = new QLineEdit(this);
         addTriggerButton = new QPushButton("Add Trigger", this);
+        refreshButton = new QPushButton(this);
+        refreshButton->setIconSize(iconSize);
+        refreshButton->setFixedSize(iconSize);
+        eventSelectorLayout = new QHBoxLayout(this);
+        editOptionLocalisationButton = new QPushButton("Edit Option Localisation", this);
+        //下面这两行被注释掉的代码是用来给刷新按钮添加图标的 图标大小应为24x24，等待软件完成后再使用
+        // QIcon refreshIcon("path/to/your/icon.png");  // Replace with the path to your icon file
+        //refreshButton->setIcon(refreshIcon);
+        namespaceInputDialog->layout()->addWidget(loadButton);
+        connect(loadButton, &QPushButton::clicked, this, &EventGenerator::loadEvents);
 
         eventCounter = 0;
 
@@ -61,13 +84,18 @@ public:
         leftLayout->addItem(new QSpacerItem(0, 10));
 
         leftLayout->addWidget(addButton);
+        leftLayout->addWidget(editOptionLocalisationButton);
         leftLayout->addWidget(addTriggerButton);
         leftLayout->addWidget(addEventButton);
         leftLayout->addWidget(saveButton);
         leftLayout->addItem(new QSpacerItem(0, 20));
 
+        //下拉框的刷新按钮
+        eventSelectorLayout->addWidget(refreshButton);
+
         rightLayout->addWidget(new QLabel("Select Event:", this));
-        rightLayout->addWidget(eventSelector);
+        eventSelectorLayout->addWidget(eventSelector);
+        rightLayout->addLayout(eventSelectorLayout);
         rightLayout->addWidget(new QLabel("Event Details:", this));
         rightLayout->addWidget(eventViewer);
         rightLayout->addWidget(updateButton);
@@ -84,15 +112,24 @@ public:
         connect(titleLocalisationLineEdit, &QLineEdit::textEdited, this, &EventGenerator::updateLocalisation);
         connect(descLocalisationLineEdit, &QLineEdit::textEdited, this, &EventGenerator::updateLocalisation);
         connect(addTriggerButton, &QPushButton::clicked, this, &EventGenerator::addTrigger);
-
-
+        connect(eventSelector, SIGNAL(activated(int)), this, SLOT(updateEventSelector(int)));
+        connect(refreshButton, &QPushButton::clicked, this, &EventGenerator::refreshEventSelector);
+        connect(namespaceInputDialog, &QInputDialog::finished, this, &EventGenerator::hideNamespaceLineEdit);
+        connect(editOptionLocalisationButton, &QPushButton::clicked, this, &EventGenerator::editOptionLocalisation);
 
 
 
         setLayout(mainLayout);
 
-        QString namespaceName = QInputDialog::getText(this, "Enter Namespace", "Namespace:");
-        namespaceLineEdit->setText(namespaceName);
+        int result = namespaceInputDialog->exec();  // 显示输入对话框，等待用户点击 "确定 "或 "取消"。
+        if (result == QDialog::Accepted) {
+            // Only set the namespace if it hasn't been set yet
+            if (namespaceLineEdit->text().isEmpty()) {
+                QString namespaceName = namespaceInputDialog->textValue();
+                namespaceLineEdit->setText(namespaceName);
+            }
+        }
+
 
         QString defaultText = "Please enter localization content";
         titleLocalisationLineEdit->setText(defaultText);
@@ -103,15 +140,201 @@ public:
 
 public slots:
 
+    void loadLocalisationFile(const QString& fileName) {
+        QFile file(fileName);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+            return;
+
+        QTextStream in(&file);
+        bool isFirstLine = true;
+        while (!in.atEnd()) {
+            QString line = in.readLine();
+            // Skip the first line
+            if (isFirstLine) {
+                isFirstLine = false;
+                continue;
+            }
+            int colonIndex = line.indexOf(':');
+            if (colonIndex != -1) {
+                QString key = line.left(colonIndex).trimmed();
+                QString value = line.mid(colonIndex + 1).trimmed();
+                // remove the double quotes around the value
+                if (value.startsWith('\"') && value.endsWith('\"')) {
+                    value = value.mid(1, value.length() - 2);
+                }
+                localisationMap.insert(key, value);
+            }
+        }
+        file.close();
+    }
+
+
+
+    void loadEvents() {
+        // Open the event file
+        QString eventFileName = QFileDialog::getOpenFileName(this, "Load Event", "", "Text Files (*.txt)");
+        if (!eventFileName.isEmpty()) {
+            QFile eventFile(eventFileName);
+            if (eventFile.open(QIODevice::ReadOnly)) {
+                QTextStream stream(&eventFile);
+                QString namespaceLine;
+                stream.readLineInto(&namespaceLine);
+                // Extract the namespace from the line "namespace = <namespace>"
+                QString namespaceName = namespaceLine.mid(namespaceLine.indexOf('=') + 1).trimmed();
+                namespaceLineEdit->setText(namespaceName);
+                // Load the rest of the event file into the event editor
+                eventEditor->setText(stream.readAll());
+                eventFile.close();
+                //设置一个flag，标志着我们使用读取文件的方式进入了程序
+                eventLoadedFromFile = true;
+                // 刷新事件选择器
+                refreshEventSelector();
+            }
+        }
+
+        // Open the localisation file
+        QString localisationFileName = QFileDialog::getOpenFileName(this, "Load Localisation (Optional)", "", "YAML Files (*.yml)");
+        if (!localisationFileName.isEmpty()) {
+            if (!localisationFileName.isEmpty()) {
+                loadLocalisationFile(localisationFileName);
+                // 如果读取了本地化文件，显示第一个事件的本地化标题和描述
+                if (!localisationMap.isEmpty()) {
+                    QString namespaceName = namespaceLineEdit->text();
+                    QString titleKey = namespaceName + ".0001.t";
+                    QString descKey = namespaceName + ".0001.desc";
+                    if (localisationMap.contains(titleKey) && localisationMap.contains(descKey)) {
+                        titleLocalisationLineEdit->setText(localisationMap.value(titleKey));
+                        descLocalisationLineEdit->setText(localisationMap.value(descKey));
+                    }
+                }
+            }
+        }
+
+        // Close the namespace input dialog and enter the main interface
+        QInputDialog* namespaceInputDialog = qobject_cast<QInputDialog*>(sender()->parent());
+        if (namespaceInputDialog) {
+            namespaceInputDialog->accept();
+        }
+    }
+
+    void editOptionLocalisation() {
+        QDialog* dialog = new QDialog(this);
+        QVBoxLayout* layout = new QVBoxLayout(dialog);
+        QComboBox* optionSelectorComboBox = new QComboBox(dialog);
+        QLineEdit* optionLocalisationLineEdit = new QLineEdit(dialog);
+        QDialogButtonBox* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, dialog);
+
+        layout->addWidget(optionSelectorComboBox);
+        layout->addWidget(optionLocalisationLineEdit);
+        layout->addWidget(buttonBox);
+
+        // Get the current selected event
+        QString eventName = eventSelector->currentText();
+
+        // 在事件编辑器中查找事件
+        QString eventText = eventEditor->toPlainText();
+        int startIndex = eventText.indexOf(QString("\n%1 = {").arg(eventName));
+        if (startIndex != -1) {
+            int braceCount = 1;  // 计算开括号的数量
+            int endIndex = startIndex + QString("\n%1 = {").arg(eventName).length();
+
+            // 找到事件的终点
+            while (endIndex < eventText.length()) {
+                QChar ch = eventText[endIndex];
+                if (ch == '{') {
+                    braceCount++;
+                }
+                else if (ch == '}') {
+                    braceCount--;
+                    if (braceCount == 0) {  // 发现事件结束
+                        break;
+                    }
+                }
+                endIndex++;
+            }
+
+            QString eventDetails = eventText.mid(startIndex, endIndex - startIndex);
+
+            // 在事件详情中查找所有的选项，并添加到 optionSelectorComboBox 中
+            QRegularExpression optionRegex("option = \\{\\n\\s*name = ([\\w\\.]+)");
+            QRegularExpressionMatchIterator i = optionRegex.globalMatch(eventDetails);
+            while (i.hasNext()) {
+                QRegularExpressionMatch match = i.next();
+                optionSelectorComboBox->addItem(match.captured(1));
+            }
+        }
+
+        // 更新选项本地化文本
+        connect(optionSelectorComboBox, &QComboBox::currentTextChanged, [=](const QString& optionName) {
+            QString optionLocalisationKey = QString("%2").arg(optionName);
+            QString optionLocalisation = localisationMap.value(optionLocalisationKey, "Please enter localisation content");
+            optionLocalisationLineEdit->setText(optionLocalisation);
+            });
+
+        // 更新本地化映射
+        connect(buttonBox, &QDialogButtonBox::accepted, [=]() {
+            QString optionName = optionSelectorComboBox->currentText();
+            QString optionLocalisationKey = QString("%1").arg(optionName);
+            QString optionLocalisation = optionLocalisationLineEdit->text();
+            localisationMap.insert(optionLocalisationKey, optionLocalisation);
+            dialog->accept();
+            });
+
+        // 取消对话框
+        connect(buttonBox, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
+
+        dialog->setLayout(layout);
+        dialog->show();
+
+        // 触发 currentTextChanged 信号以更新选项本地化文本
+        QString currentOption = optionSelectorComboBox->currentText();
+        if (!currentOption.isEmpty()) {
+            emit optionSelectorComboBox->currentTextChanged(currentOption);
+        }
+    }
+
+    void hideNamespaceLineEdit() {
+        namespaceLineEdit->hide();
+    }
+
+    void refreshEventSelector() {
+        // Clear the event selector
+        eventSelector->clear();
+
+        // Get the text from the event editor
+        QString eventText = eventEditor->toPlainText();
+
+        // Use a regular expression to find all events
+        QRegularExpression re(QString("\\b%1\\.\\d{4} = \\{").arg(namespaceLineEdit->text()));
+        QRegularExpressionMatchIterator i = re.globalMatch(eventText);
+        while (i.hasNext()) {
+            QRegularExpressionMatch match = i.next();
+            QString eventName = match.captured().left(match.captured().length() - 4);  // Remove " = {" from the end
+
+            // Check if the event is already in the event selector
+            if (eventSelector->findText(eventName) == -1) {
+                eventSelector->addItem(eventName);
+            }
+        }
+    }
+
+    void updateEventSelector(int index) {
+        // Get the selected event name
+        QString eventName = eventSelector->itemText(index);
+
+        // Load the event
+        loadEvent(eventName);
+    }
+
     QString generateTriggerText(QString delayType, int delayValue, int delayMinValue ,int delayMaxValue ,QString delayUnit, QString triggeredEventId) {
 
         QString text = "trigger_event = {\n";
 
         if (delayType == "Fixed") {
-            text += "    " + delayUnit + " = " + QString::number(delayValue) + "\n";
+            text += "            " + delayUnit + " = " + QString::number(delayValue) + "\n";
         }
         else if (delayType == "Range") {
-            text += "    "+ delayUnit +" = { " + QString::number(delayMinValue) + " " + QString::number(delayMaxValue) + " }\n";
+            text += "            "+ delayUnit +" = { " + QString::number(delayMinValue) + " " + QString::number(delayMaxValue) + " }\n";
         }
 
         text += "            id = " + triggeredEventId + "\n";
@@ -321,6 +544,23 @@ public slots:
             else if (triggerType == "option") {
                 QString optionName = optionSelectorComboBox->currentText();
                 insertPos = eventDetails.indexOf("\n", eventDetails.indexOf(QString("name = %1").arg(optionName))) + 1;
+                eventDetails.insert(insertPos, triggerText);
+            }
+            else if (triggerType == "after") {
+                int lastBracePos = eventDetails.lastIndexOf("}");
+                int afterBlockPos = eventDetails.indexOf("\n    after = {");
+                QString afterStart = "    after = {";
+                if (lastBracePos != -1) {
+                    if (afterBlockPos == -1) {  // If the event does not already contain an "after" block
+                        eventDetails.insert(lastBracePos, "\n    after = {" + triggerText + "}\n");
+                    }
+                    else {  // If the event already contains an "after" block
+                        int afterBlockEndPos = eventDetails.indexOf("\n", afterBlockPos + afterStart.length() - 1) + 1;
+                        if (afterBlockEndPos != -1) {
+                            eventDetails.insert(afterBlockEndPos, triggerText);
+                        }
+                    }
+                }
             }
             else {
                 // 其他触发器类型...
@@ -336,6 +576,8 @@ public slots:
 
 
         addTriggerDialog->accept();
+        //添加后同步更新到主编辑框中
+        updateEvent();
     }
 
     void updateLocalisation() {
@@ -402,7 +644,7 @@ public slots:
             return;
         }
 
-        QString option = QString("\n        option = {\n            name = %1.%2.%3\n            # option details...\n        }\n")
+        QString option = QString("\n    option = {\n        name = %1.%2.%3\n        # option details...\n    }\n")
             .arg(namespaceLineEdit->text())
             .arg(eventId)
             .arg(optionId);
@@ -417,6 +659,8 @@ public slots:
         QString optionLocalisation = QInputDialog::getText(this, "Enter Option Localisation", "Option Localisation:");
         optionLocalisationLineEdit->setText(optionLocalisation);
         localisationMap.insert(QString("%1.%2.%3").arg(namespaceLineEdit->text()).arg(eventId).arg(optionId), optionLocalisation);
+        // 更新eventViewer中的文本内容
+        loadEvent(eventName);
     }
 
     // 增加新事件
@@ -427,15 +671,18 @@ public slots:
         QString eventType = eventTypeComboBox->currentText();
         QString theme = themeLineEdit->text();
 
-        // 初始化本地化信息
-        localisationMap[QString("%1.%2.t").arg(namespaceName).arg(eventId)] = "";
-        localisationMap[QString("%1.%2.desc").arg(namespaceName).arg(eventId)] = "";
 
         QString eventStructure = QString("\n%1.%2 = {\n    type = %3\n    title = %1.%2.t\n    desc = %1.%2.desc\n    theme = %4\n    # other event details...\n}\n")
             .arg(namespaceName)
             .arg(eventId)
             .arg(eventType)
             .arg(theme);
+
+        // 如果已经从文件中加载了事件，就不添加新的事件
+        if (eventLoadedFromFile) {
+            eventLoadedFromFile = false;
+            return;
+        }
 
         eventEditor->append(eventStructure);
         currentOptionCounter = 0;  // 重置选项计数器
@@ -518,10 +765,30 @@ public slots:
             QString eventText = eventEditor->toPlainText();
             int startIndex = eventText.indexOf(QString("\n%1.%2 = {").arg(namespaceLineEdit->text()).arg(eventId));
             if (startIndex != -1) {
-                int endIndex = eventText.indexOf("}\n", startIndex) + 2;
-                QString newEvent = eventViewer->toPlainText();
-                eventText.replace(startIndex, endIndex - startIndex, newEvent);
-                eventEditor->setText(eventText);
+                int braceCount = 1;  // 计算开括号的数量
+                int endIndex = startIndex + QString("\n%1.%2 = {").arg(namespaceLineEdit->text()).arg(eventId).length();
+
+                // 找到事件的终点
+                while (endIndex < eventText.length()) {
+                    QChar ch = eventText[endIndex];
+                    if (ch == '{') {
+                        braceCount++;
+                    }
+                    else if (ch == '}') {
+                        braceCount--;
+                        if (braceCount == 0) {  // 发现事件结束
+                            endIndex++;
+                            break;
+                        }
+                    }
+                    endIndex++;
+                }
+
+                if (endIndex < eventText.length()) {
+                    QString newEvent = eventViewer->toPlainText();
+                    eventText.replace(startIndex, endIndex - startIndex, newEvent);
+                    eventEditor->setText(eventText);
+                }
             }
         }
 
@@ -614,6 +881,10 @@ private:
     QVBoxLayout* delayMaxLayout;
     QVBoxLayout* delayFixedLayout;
     QVBoxLayout* delayUnitLayout;
+    QPushButton* refreshButton;
+    QHBoxLayout* eventSelectorLayout;
+    QPushButton* editOptionLocalisationButton;
+    bool eventLoadedFromFile = false;  // 没有从文件中加载事件
 
     int currentOptionCounter;
     int eventCounter;
