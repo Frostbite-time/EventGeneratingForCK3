@@ -9,7 +9,7 @@ A tool for generating events for Crusader Kings 3, used to help mod makers.
 
 
   
-使用示例：
+使用示例：  
 ![](https://raw.githubusercontent.com/Frostbite-time/EventGeneratingForCK3/main/img-storage/example.png?raw=true)
 ![](https://github.com/Frostbite-time/EventGeneratingForCK3/blob/main/img-storage/example1.png?raw=true)  
 ![](https://github.com/Frostbite-time/EventGeneratingForCK3/blob/main/img-storage/example2.png?raw=true)  
