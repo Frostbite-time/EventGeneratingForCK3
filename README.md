@@ -1,4 +1,4 @@
-# eventGeneratingForCK3
+# EventGeneratingForCK3
 A tool for generating events for Crusader Kings 3, used to help mod makers.
 
 一个为十字军之王3制作的事件生成器，主要针对新手modder。目前还在开发中，但是已经有了基本功能
