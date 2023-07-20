@@ -16,4 +16,10 @@ A tool for generating events for Crusader Kings 3, used to help mod makers.
 
 注意事项  
  对于某些文件顶部有较长注释说明的原版文件可能需要手动删除注释，注意保留定义namespace的语句
- 编辑框对于某些缩进较大的文件可能有点反人类，建议自行修改，如果有好的建议可以提交你的代码
+ 编辑框对于某些缩进较大的文件可能有点反人类，建议自行修改，如果有好的建议可以提交你的代码  
+
+
+150多个事件的链接关系测试
+![](https://github.com/Frostbite-time/EventGeneratingForCK3/blob/main/img-storage/test.png?raw=true)
+
+
