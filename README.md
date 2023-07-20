@@ -10,4 +10,4 @@ A tool for generating events for Crusader Kings 3, used to help mod makers.
 
   
 使用示例：
-[Image text]()
+[Image text](https://github.com/Frostbite-time/EventGeneratingForCK3/blob/main/img-storage/example.png)
