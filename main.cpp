@@ -123,7 +123,7 @@ public:
         QVBoxLayout* rightLayout = new QVBoxLayout();  // Layout for the right side (sidebar)
         updateButton = new QPushButton("Update Event", this);
         titleLocalisationLineEdit = new QLineEdit(this);
-        descLocalisationLineEdit = new QLineEdit(this);
+        descLocalisationLineEdit = new QTextEdit(this);
         addTriggerButton = new QPushButton("Add Trigger", this);
         refreshButton = new QPushButton(this);
         refreshButton->setIconSize(iconSize);
@@ -183,7 +183,7 @@ public:
         connect(eventSelector, &QComboBox::currentTextChanged, this, &EventGenerator::loadEvent);
         connect(updateButton, &QPushButton::clicked, this, &EventGenerator::updateEvent);
         connect(titleLocalisationLineEdit, &QLineEdit::textEdited, this, &EventGenerator::updateLocalisation);
-        connect(descLocalisationLineEdit, &QLineEdit::textEdited, this, &EventGenerator::updateLocalisation);
+        connect(descLocalisationLineEdit, &QTextEdit::textChanged, this, &EventGenerator::updateLocalisation);
         connect(addTriggerButton, &QPushButton::clicked, this, &EventGenerator::addTrigger);
         connect(eventSelector, SIGNAL(activated(int)), this, SLOT(updateEventSelector(int)));
         connect(refreshButton, &QPushButton::clicked, this, &EventGenerator::refreshEventSelector);
@@ -213,7 +213,11 @@ public:
 
         QString defaultText = "Please enter localization content";
         titleLocalisationLineEdit->setText(defaultText);
+        // 在更改文本之前阻断信号
+        descLocalisationLineEdit->blockSignals(true);
         descLocalisationLineEdit->setText(defaultText);
+        // 更改完后重新打开信号
+        descLocalisationLineEdit->blockSignals(false);
 
         addEvent();
         parseEventText(eventEditor->toPlainText());
@@ -519,7 +523,10 @@ public slots:
                     QString descKey = namespaceName + ".0001.desc";
                     if (localisationMap.contains(titleKey) && localisationMap.contains(descKey)) {
                         titleLocalisationLineEdit->setText(localisationMap.value(titleKey));
+                        // 在更改文本之前阻断信号
+                        descLocalisationLineEdit->blockSignals(true);
                         descLocalisationLineEdit->setText(localisationMap.value(descKey));
+                        descLocalisationLineEdit->blockSignals(false);
                     }
                 }
             }
@@ -916,7 +923,7 @@ public slots:
         QString namespaceName = namespaceLineEdit->text();
 
         QString titleLocalisation = titleLocalisationLineEdit->text();
-        QString descLocalisation = descLocalisationLineEdit->text();
+        QString descLocalisation = descLocalisationLineEdit->toPlainText();
 
         localisationMap[QString("%1.%2.t").arg(namespaceName).arg(eventId)] = titleLocalisation;
         localisationMap[QString("%1.%2.desc").arg(namespaceName).arg(eventId)] = descLocalisation;
@@ -1050,7 +1057,7 @@ public slots:
         QString namespaceName = namespaceLineEdit->text();
         QString eventId = QString("%1").arg(eventCounter, 4, 10, QChar('0'));
         localisationMap.insert(QString("%1.%2.t").arg(namespaceName).arg(eventId), titleLocalisationLineEdit->text());
-        localisationMap.insert(QString("%1.%2.desc").arg(namespaceName).arg(eventId), descLocalisationLineEdit->text());
+        localisationMap.insert(QString("%1.%2.desc").arg(namespaceName).arg(eventId), descLocalisationLineEdit->toPlainText());
         // 保存事件的本地化信息到文件
         QString localisationFilePath = QFileDialog::getSaveFileName(this, "Save Localisation", "", "YAML Files (*.yml)");
         QFile localisationFile(localisationFilePath);
@@ -1163,7 +1170,9 @@ public slots:
                 QString namespaceName = namespaceLineEdit->text();
                 // 更新本地化文本框
                 titleLocalisationLineEdit->setText(localisationMap.value(QString("%1.%2.t").arg(namespaceName).arg(eventId)));
+                descLocalisationLineEdit->blockSignals(true);
                 descLocalisationLineEdit->setText(localisationMap.value(QString("%1.%2.desc").arg(namespaceName).arg(eventId)));
+                descLocalisationLineEdit->blockSignals(false);
                 
             }
         }
@@ -1187,7 +1196,7 @@ private:
     QTextEdit* eventViewer;
     QPushButton* updateButton;
     QLineEdit* titleLocalisationLineEdit;
-    QLineEdit* descLocalisationLineEdit;
+    QTextEdit* descLocalisationLineEdit;
     QList<QLineEdit*> optionLocalisationLineEdits;
     QMap<QString, QString> localisationMap;  // 保存事件与本地化信息的映射关系
     QVBoxLayout* leftLayout;
